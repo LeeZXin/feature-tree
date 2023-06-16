@@ -145,13 +145,13 @@ func (m *NumberFeatureHandler) Handle(value *util.StringValue, operator *operato
 	targets := operator.ValueSplitter.SplitValue(value.Value)
 	actualDecimal, err := decimal.NewFromString(actual)
 	if err != nil {
-		return false, err
+		return false, nil
 	}
 	targetsDecimal := make([]decimal.Decimal, 0, len(targets))
 	for _, target := range targets {
 		targetDecimal, err := decimal.NewFromString(target)
 		if err != nil {
-			return false, err
+			return false, nil
 		}
 		targetsDecimal = append(targetsDecimal, targetDecimal)
 	}

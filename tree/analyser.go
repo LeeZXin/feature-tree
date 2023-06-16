@@ -85,39 +85,24 @@ type NodeAnalyser struct {
 
 // Analyse 解析整棵树
 func (t *NodeAnalyser) Analyse() AnalyseResult {
+	return t.AnalyseWithInterceptors(nil)
+}
+
+// AnalyseWithInterceptors 解析整棵树 带拦截器
+func (t *NodeAnalyser) AnalyseWithInterceptors(interceptors []Interceptor) AnalyseResult {
 	resultChan := make(chan AnalyseResult)
 	ctx := t.FeatureAnalyseContext.Ctx
 	beginTime := time.Now()
+	// 是否有超时控制
+	_, hasTimeout := ctx.Deadline()
+	if !hasTimeout {
+		return t.doAnalyse(interceptors)
+	}
 	go func() {
 		defer func() {
 			close(resultChan)
 		}()
-		tree := t.FeatureAnalyseContext.FeatureTree
-		res, err := t.analyseNode(tree.Node)
-		if err != nil {
-			resultChan <- &ErrMetricsResult{
-				AnalyseMetrics: &AnalyseMetrics{
-					LeafAnalyseMetrics: t.metrics,
-					Duration:           time.Since(beginTime),
-				},
-				Err: err.(error),
-			}
-		} else if res {
-			resultChan <- &SuccessMetricsResult{
-				AnalyseMetrics: &AnalyseMetrics{
-					LeafAnalyseMetrics: t.metrics,
-					Duration:           time.Since(beginTime),
-				},
-			}
-		} else {
-			resultChan <- &FailMetricsResult{
-				AnalyseMetrics: &AnalyseMetrics{
-					LeafAnalyseMetrics: t.metrics,
-					Duration:           time.Since(beginTime),
-				},
-				AnalyseDetails: t.missResult,
-			}
-		}
+		resultChan <- t.doAnalyse(interceptors)
 	}()
 	select {
 	case result := <-resultChan:
@@ -145,7 +130,49 @@ func (t *NodeAnalyser) Analyse() AnalyseResult {
 	}
 }
 
-func (t *NodeAnalyser) analyseNode(node *Node) (bool, error) {
+func (t *NodeAnalyser) doAnalyse(interceptors []Interceptor) AnalyseResult {
+	invoker := func(ctx *FeatureAnalyseContext) AnalyseResult {
+		tree := ctx.FeatureTree
+		res, err := t.analyseNode(ctx, tree.Node)
+		beginTime := time.Now()
+		if err != nil {
+			return &ErrMetricsResult{
+				AnalyseMetrics: &AnalyseMetrics{
+					LeafAnalyseMetrics: t.metrics,
+					Duration:           time.Since(beginTime),
+				},
+				Err: err,
+			}
+		} else if res {
+			return &SuccessMetricsResult{
+				AnalyseMetrics: &AnalyseMetrics{
+					LeafAnalyseMetrics: t.metrics,
+					Duration:           time.Since(beginTime),
+				},
+			}
+		} else {
+			return &FailMetricsResult{
+				AnalyseMetrics: &AnalyseMetrics{
+					LeafAnalyseMetrics: t.metrics,
+					Duration:           time.Since(beginTime),
+				},
+				AnalyseDetails: t.missResult,
+			}
+		}
+	}
+	if interceptors == nil || len(interceptors) == 0 {
+		return invoker(t.FeatureAnalyseContext)
+	}
+	wrapper := interceptorsWrapper{
+		interceptorList: interceptors,
+	}
+	return wrapper.intercept(t.FeatureAnalyseContext, invoker)
+}
+
+func (t *NodeAnalyser) analyseNode(fctx *FeatureAnalyseContext, node *Node) (bool, error) {
+	if fctx.Ctx != nil && fctx.Ctx.Err() != nil {
+		return false, fctx.Ctx.Err()
+	}
 	t.FeatureAnalyseContext.SetCurrentNode(node)
 	beginTime := time.Now()
 	if node.IsLeave() {
@@ -158,7 +185,7 @@ func (t *NodeAnalyser) analyseNode(node *Node) (bool, error) {
 			})
 		}()
 		analyser := leafAnalyser{leaf: node.Leaf}
-		analyseDetail, ok, err := analyser.Analyse(t.FeatureAnalyseContext)
+		analyseDetail, ok, err := analyser.Analyse(fctx)
 		if err != nil {
 			return false, err
 		}
@@ -171,7 +198,7 @@ func (t *NodeAnalyser) analyseNode(node *Node) (bool, error) {
 		if and != nil && len(and) > 0 {
 			//and节点下 全部为true
 			for _, n := range and {
-				b, e := t.analyseNode(n)
+				b, e := t.analyseNode(fctx, n)
 				if e != nil {
 					return false, e
 				}
@@ -185,7 +212,7 @@ func (t *NodeAnalyser) analyseNode(node *Node) (bool, error) {
 		if or != nil && len(or) > 0 {
 			//and节点下 一个为true 返回true
 			for _, n := range or {
-				b, e := t.analyseNode(n)
+				b, e := t.analyseNode(fctx, n)
 				if e != nil {
 					return false, e
 				}

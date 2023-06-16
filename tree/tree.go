@@ -28,21 +28,21 @@ func (t *PlainInfo) IsLeave() bool {
 // FeatureTree 特征树
 type FeatureTree struct {
 	// Id id
-	Id string
+	Id string `json:"id"`
 	// TreePlainInfo 配置信息
-	TreePlainInfo *PlainInfo
+	TreePlainInfo *PlainInfo `json:"-"`
 	// 实际节点内容
-	Node *Node
+	Node *Node `json:"node"`
 }
 
 // Node 特征树单个节点
 type Node struct {
 	// And and节点
-	And []*Node
+	And []*Node `json:"and"`
 	// Or or节点
-	Or []*Node
+	Or []*Node `json:"or"`
 	// Leaf 叶子节点
-	Leaf *Leaf
+	Leaf *Leaf `json:"leaf"`
 }
 
 // IsLeave 判断是否是叶子节点
@@ -53,15 +53,15 @@ func (t *Node) IsLeave() bool {
 // Leaf 叶子节点
 type Leaf struct {
 	// FeatureType 特征类型
-	FeatureType string
+	FeatureType string `json:"featureType"`
 	// KeyNameInfo 特征key
-	KeyNameInfo *util.KeyNameInfo
+	KeyNameInfo *util.KeyNameInfo `json:"keyNameInfo"`
 	// DataType 特征值类型
-	DataType string
+	DataType string `json:"dataType"`
 	// Operator 操作符
-	Operator *operator.Operator
+	Operator *operator.Operator `json:"operator"`
 	// StringValue 期待值
-	StringValue *util.StringValue
+	StringValue *util.StringValue `json:"stringValue"`
 }
 
 // Verify 校验叶子节点

@@ -57,11 +57,6 @@ func RegisterHandler(handler FeatureHandler) {
 	handlerMap.Store(handler.GetDataType(), handler)
 }
 
-// RemoveHandler 注册Remove
-func RemoveHandler(dataType string) {
-	handlerMap.Delete(dataType)
-}
-
 // GetHandler 获取handler
 func GetHandler(dataType string) (FeatureHandler, bool) {
 	value, ok := handlerMap.Load(dataType)
